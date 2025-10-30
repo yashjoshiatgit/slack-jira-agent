@@ -1,0 +1,153 @@
+# /tools/jira_tools.py
+import json
+import logging
+import os
+from langchain.agents import create_agent
+from langchain_core.tools import tool
+from config import llm
+from config import jira_client, active_workflows
+from prompts.prompt import JIRA_SYSTEM_PROMPT
+
+@tool
+def create_issue(project_key: str, summary: str, description: str, issue_type: str = "Task") -> str:
+    """
+    Creates a new issue in the specified tracking system (e.g., Jira).
+    This is the first step in the access request sequence.
+    
+    Args:
+    project_key: The project identifier (e.g., "CPG").
+        summary: A short description of the issue.
+        description: The detailed body of the issue.
+        issue_type: The type of issue (default: "Task").
+        
+    Returns:
+        JSON with the created 'ticket_id' and 'ticket_link'.
+    """
+    logging.info(f"TOOL: create_issue for project {project_key}")
+    try:
+        # NOTE: This section contains the core Jira creation logic from the old tool
+        issue = jira_client.create_issue(
+            project=project_key,
+            summary=summary,
+            description=description,
+            issuetype={"name": issue_type},
+        )
+        ticket_id = issue.key
+        ticket_link = f"{os.getenv('JIRA_URL')}/browse/{ticket_id}"
+
+        logging.info(f"Created Issue {ticket_id}")
+        return json.dumps({
+            "status": "success", 
+            "ticket_id": ticket_id, 
+            "ticket_link": ticket_link,
+            "message": f"Issue {ticket_id} created: {ticket_link}"
+        })
+    except Exception as e:
+        logging.error(f"Failed to create issue: {e}")
+        return json.dumps({"status": "error", "message": f"Failed to create issue: {e}"})
+
+@tool
+def store_workflow_mapping(ticket_id: str, user_email: str, access_requested: str, slack_info: dict) -> str:
+    """
+    Stores the mapping between a new ticket and external communication channels 
+    (Slack thread, user details) to track the active workflow. This links the ticket to the thread.
+    
+    Args:
+        ticket_id: The ID of the issue to track.
+        user_email: The email of the person who needs access.
+        access_requested: The specific system or resource requested.
+        slack_info: Dictionary containing 'channel' and 'thread_ts' for Slack.
+        
+    Returns:
+        JSON confirmation of mapping status.
+    """
+    logging.info(f"TOOL: store_workflow_mapping for {ticket_id}")
+    try:
+        active_workflows[ticket_id] = {
+            "slack_channel": slack_info['channel'],
+            "slack_thread_ts": slack_info['thread_ts'],
+            "user_email": user_email,
+            "access_requested": access_requested
+        }
+        
+        return json.dumps({
+            "status": "success",
+            "ticket_id": ticket_id,
+            "message": "Workflow mapping successfully stored."
+        })
+    except Exception as e:
+        logging.error(f"Failed to store mapping: {e}")
+        return json.dumps({"status": "error", "message": f"Failed to store mapping: {e}"})
+
+@tool
+def transition_issue_to_done(ticket_id: str, ticket_link: str) -> str:
+    """
+    Transitions a ticket to a final state like 'Done', 'Approved', or 'Resolved' and adds a final comment.
+    This is the first step in the finalization sequence.
+    
+    Args:
+        ticket_id: The ID of the ticket to transition.
+        ticket_link: The full URL to the Jira ticket (for messaging).
+        
+    Returns:
+        JSON with the status of the transition.
+    """
+    logging.info(f"TOOL: transition_issue_to_done for {ticket_id}")
+    try:
+        issue = jira_client.issue(ticket_id)
+        if issue.fields.status.name.lower() in ["done", "closed", "resolved", "approved"]:
+             return json.dumps({"status": "already_done", "message": f"Ticket {ticket_link} was already closed."})
+            
+        transitions = jira_client.transitions(ticket_id)
+        done_transition = next((t for t in transitions if t['name'].lower() in ["done", "approve", "closed"]), None)
+        comment_to_add = "==============>>All approvals received. Access granted. Closing ticket."
+        
+        if done_transition:
+            jira_client.add_comment(ticket_id, comment_to_add)
+            jira_client.transition_issue(ticket_id, done_transition['id'])
+        else:
+            jira_client.add_comment(ticket_id, "==============>>All approvals received. Could not find a 'Done' transition. Please close manually.")
+
+        return json.dumps({
+            "status": "success",
+            "ticket_id": ticket_id,
+            "message": f"Issue {ticket_id} successfully transitioned."
+        })
+    except Exception as e:
+        logging.error(f"Failed to transition issue: {e}")
+        return json.dumps({"status": "error", "message": str(e)})
+
+@tool
+def post_final_confirmation(ticket_id: str, ticket_link: str) -> str:
+    """
+    Posts a final success confirmation message to the external channel (e.g., Slack)
+    and removes the ticket from the active workflow tracker.
+    
+    Args:
+        ticket_id: The ID of the completed ticket.
+        ticket_link: The URL to the completed ticket.
+        
+    Returns:
+        JSON confirmation that the external message was sent.
+    """
+    logging.info(f"TOOL: post_final_confirmation for {ticket_id}")
+    try:
+        active_workflows.pop(ticket_id, None)
+        
+        return json.dumps({
+            "status": "success",
+            "ticket_id": ticket_id,
+            "message": f"🚀 The access request in ticket {ticket_link} has been fully approved and closed!"
+        })
+    except Exception as e:
+        logging.error(f"Failed to post confirmation: {e}")
+        return json.dumps({"status": "error", "message": f"Failed to post confirmation: {e}"})
+
+
+tools = [create_issue, store_workflow_mapping, transition_issue_to_done, post_final_confirmation]
+
+Jira_Agent = create_agent(
+    llm, 
+    tools,
+    system_prompt= JIRA_SYSTEM_PROMPT # This variable must now contain the content below
+)

@@ -1,0 +1,20 @@
+[project]
+name = "project-jira-slack-email"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "grandalf>=0.8",
+    "jira>=3.10.5",
+    "langchain-core>=0.3.78",
+    "langchain-google-genai>=2.1.12",
+    "langchain-openai>=0.3.35",
+    "python-dotenv>=1.0.1",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.6",
+    "slack-bolt>=1.26.0",
+    "slack-sdk>=3.37.0",
+    "langgraph>=1.0.1",
+    "langchain>=1.0.2",
+]

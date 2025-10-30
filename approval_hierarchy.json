@@ -1,0 +1,14 @@
+{
+  "managers": {
+    "yashjoshi.one@gmail.com": [
+      "peauampeauam@gmail.com",
+      "yash_22132@ldrp.ac.in"
+    ],
+    "yashjoshi1485@gmail.com":[
+       "yash123checking@gmail.com"
+    ]
+  },
+  "fallback_approvers": [
+    "yashjoshi1485@gmail.com"
+  ]
+}
