@@ -40,13 +40,18 @@ def handle_app_mention(body, say):
         Requester's Email: {requester_email}
         Slack Info: channel='{channel}', thread_ts='{thread_ts}'
 
-        Process this access request workflow:
-        1. Acknowledge in Slack (ONE message only)
-        2. Create Jira ticket
-        3. Notify user in Slack with the ticket link
-        4. Find and notify approvers
+        Process this access request workflow (each step ONCE):
+        1. SlackAgent: Send ONE acknowledgment message
+        2. TicketAgent: Create Jira ticket and store mapping
+        3. SlackAgent: Send ONE ticket notification with link
+        4. OrganizationAgent: Get approvers, update ticket, send emails
+        5. END workflow
         
-        Do not create duplicate tickets. Execute each step once.
+        CRITICAL: 
+        - SlackAgent should be called EXACTLY 2 times total (acknowledge + ticket link)
+        - Do NOT send duplicate or repetitive Slack messages
+        - Each agent completes its task and stops
+        - Do not create duplicate tickets
         """
         
         initial_messages = [HumanMessage(content=prompt)]

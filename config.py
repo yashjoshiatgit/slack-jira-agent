@@ -31,4 +31,10 @@ slack_client = WebClient(token=os.getenv("SLACK_BOT_TOKEN"))
 
 # 3. Shared In-Memory State
 # In a production system, this would be a database or Redis cache.
+# Each workflow dict may include:
+#   - slack_channel
+#   - slack_thread_ts
+#   - user_email
+#   - access_requested
+#   - steps_completed: set of completed step names (e.g., {"slack_ack", "ticket_created", "notified_approvers"})
 active_workflows = {}

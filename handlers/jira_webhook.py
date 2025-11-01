@@ -92,11 +92,13 @@ async def jira_webhook(request: Request):
             f"Slack Channel: {slack_channel}\n"
             f"Slack Thread: {slack_thread}\n\n"
             f"Workflow Steps:\n"
-            f"1. Check approval status using check_approval_status tool\n"
-            f"2. If fully approved: grant access and close ticket using grant_access_and_close_ticket tool\n"
-            f"3. Notify user in Slack channel {slack_channel} thread {slack_thread} with: '🎉 Your access request in {issue_key} has been approved and access granted!'\n\n"
-            f"IMPORTANT: When calling send_slack_message, use channel='{slack_channel}' and thread_ts='{slack_thread}' exactly as shown.\n"
-            f"Execute these steps in order. Do not skip step 3."
+            f"1. Use scan_ticket_for_approvals to check if ticket {issue_key} is fully approved\n"
+            f"2. If fully approved:\n"
+            f"   a. Use transition_issue_to_done to close ticket {issue_key}\n"
+            f"   b. Use send_slack_message with channel='{slack_channel}' and thread_ts='{slack_thread}' to notify: '🎉 Your access request in {issue_key} has been approved and access granted!'\n"
+            f"   c. Use post_final_confirmation to clean up the workflow\n"
+            f"3. If partially approved: Use send_slack_message to inform about pending approvers\n\n"
+            f"IMPORTANT: Execute in order. Do not skip the Slack notification."
         )
 
         # Invoke the graph to add this new message to the existing conversation's memory.

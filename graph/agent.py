@@ -84,7 +84,7 @@ def orchestrator_node(state: GraphState) -> dict:
     messages = state["messages"]
     iterations = state.get("iterations", 0)
 
-    if iterations >= 5:
+    if iterations >= 8:
         logging.warning("Orchestrator: Max iterations hit - ethical abort to avoid loops")
         return {"messages": [AIMessage(content="Orchestrator: Loop limit reached → END (safety)")], "next": "END", "iterations": iterations + 1}
 

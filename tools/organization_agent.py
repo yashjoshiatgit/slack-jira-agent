@@ -108,9 +108,10 @@ def update_ticket_with_approvers(ticket_id: str, user_email: str, access_request
         return json.dumps({"status": "error", "message": str(e)})
 
 @tool
-def notify_approvers(approver_list: list, ticket_id: str, user_email: str, ticket_link: str) -> str:
+def prepare_approver_notifications(approver_list: list, ticket_id: str, user_email: str, ticket_link: str) -> str:
     """
-    Sends email notifications to the specified approver list with the ticket link.
+    Prepares the list of approvers who need to be notified via email.
+    After calling this, the agent should use the send_email tool for each approver.
     
     Args:
         approver_list: List of email addresses to notify.
@@ -119,27 +120,25 @@ def notify_approvers(approver_list: list, ticket_id: str, user_email: str, ticke
         ticket_link: The full URL to the Jira ticket.
         
     Returns:
-        JSON with the list of successfully notified approvers.
+        JSON with email details to send to each approver.
     """
-    logging.info(f"TOOL: notify_approvers for {ticket_id}")
-    notified = []
+    logging.info(f"TOOL: prepare_approver_notifications for {ticket_id}")
     try:
-        for approver in approver_list:
-            body = (f"Please review and approve the access request for {user_email}:\n"
-                    f"{ticket_link}\n"
-                    f"To approve, please add a comment containing the word 'Approved' on the ticket.")
-            # Assuming send_email is a working function from tools.email_agent
-            send_email(approver, f"Access Request: {ticket_id}", body)
-            notified.append(approver)
-            logging.info(f"NOTIFIED -> Approver: {approver} | Ticket: {ticket_id}")
-
+        email_body = (
+            f"Please review and approve the access request for {user_email}:\n"
+            f"{ticket_link}\n\n"
+            f"To approve, please add a comment containing the word 'Approved' on the ticket."
+        )
+        
         return json.dumps({
             "status": "success",
-            "approvers_notified": notified,
-            "message": f"Email notifications sent to {len(notified)} approvers."
+            "approvers_to_notify": approver_list,
+            "email_subject": f"Access Request: {ticket_id}",
+            "email_body": email_body,
+            "message": f"Prepared email notifications for {len(approver_list)} approvers. Use send_email tool to notify each approver."
         })
     except Exception as e:
-        return json.dumps({"status": "error", "message": f"Failed to send email to all: {e}"})
+        return json.dumps({"status": "error", "message": f"Failed to prepare notifications: {e}"})
 
 @tool
 def scan_ticket_for_approvals(ticket_id: str) -> str:
@@ -193,7 +192,7 @@ def scan_ticket_for_approvals(ticket_id: str) -> str:
         return json.dumps({"status": "error", "message": str(e)})
 
 
-tools = [get_required_approvers, update_ticket_with_approvers, notify_approvers, scan_ticket_for_approvals]
+tools = [get_required_approvers, update_ticket_with_approvers, prepare_approver_notifications, scan_ticket_for_approvals, send_email]
 
 Approval_Agent = create_agent(
     llm,
