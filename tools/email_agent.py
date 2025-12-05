@@ -9,7 +9,7 @@ from prompts.prompt import EMAIL_SYSTEM_PROMPT
 
 def _send_email_core(to: str, subject: str, body: str) -> str:
     """
-    Core email sending logic. Can be called directly from other tools.
+    Core email sending logic.
     
     Args:
         to: Recipient email address

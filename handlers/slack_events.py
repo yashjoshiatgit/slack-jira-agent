@@ -1,68 +1,28 @@
-# /handlers/slack_events.py
-import logging
 import threading
 from langchain_core.messages import HumanMessage
-
-from config import slack_app # Import from central config
-from graph.agent import workflow # Import the compiled graph
+from config import slack_app
+from graph.agent import workflow
 
 @slack_app.event("app_mention")
 def handle_app_mention(body, say):
-    """
-    This function is triggered when the Slack bot is @mentioned.
-    It parses the user's request, constructs an initial prompt,
-    and invokes the agent graph in a new thread.
-    """
     event = body["event"]
-    user_text = event.get("text", "")
-    thread_ts = event.get("thread_ts", event["ts"])
-    user_id = event.get("user")
-    channel = event["channel"]
-
+    ts = event.get("thread_ts") or event.get("ts")
+    
     try:
-        # Get the email of the user who mentioned the bot
-        user_info = slack_app.client.users_info(user=user_id)
-        user_profile = user_info["user"]["profile"]
-        # Try to get email from profile, fallback to real_name + domain, or use Slack user ID
-        requester_email = user_profile.get("email")
-        if not requester_email:
-            # If no email in profile, try to extract from the message or use a placeholder
-            real_name = user_profile.get("real_name", f"slack_user_{user_id}")
-            requester_email = f"{real_name.replace(' ', '.').lower()}@company.com"
-            logging.warning(f"No email found for Slack user {user_id}, using placeholder: {requester_email}")
+        profile = slack_app.client.users_info(user=event["user"])["user"]["profile"]
+        email = profile.get("email")
 
-        # This initial prompt is the first message in the agent's memory.
-        # It provides all the necessary context to kick off the workflow.
-        prompt = f"""
-        A user has requested IT access. Your job is to orchestrate the entire approval workflow.
-        
-        Initial Request: "{user_text}"
-        Requester's Email: {requester_email}
-        Slack Info: channel='{channel}', thread_ts='{thread_ts}'
-
-        Process this access request workflow (each step ONCE):
-        1. SlackAgent: Send ONE acknowledgment message
-        2. TicketAgent: Create Jira ticket and store mapping
-        3. SlackAgent: Send ONE ticket notification with link
-        4. OrganizationAgent: Get approvers, update ticket, send emails
-        5. END workflow
-        
-        CRITICAL: 
-        - SlackAgent should be called EXACTLY 2 times total (acknowledge + ticket link)
-        - Do NOT send duplicate or repetitive Slack messages
-        - Each agent completes its task and stops
-        - Do not create duplicate tickets
-        """
-        
-        initial_messages = [HumanMessage(content=prompt)]
-        
-        # The thread_id is crucial for maintaining separate state/memory for each conversation.
-        config = {"configurable": {"thread_id": f"slack-{thread_ts}"}}
-        
-        # Run the graph in a separate thread. This is critical to avoid blocking
-        # the Slack event handler, which must respond within 3 seconds.
-        threading.Thread(target=workflow.invoke, args=({"messages": initial_messages}, config)).start()
+        if not email:
+            return say("Error: Could not retrieve email. (Is this a bot?)", thread_ts=ts)
+        state = {
+            "messages": [HumanMessage(content=f"Request: {event['text']}\nEmail: {email}\nChannel ID: {event['channel']}\nThread TS: {ts}")],
+            "channel_id": event["channel"],
+            "thread_ts": ts,
+            "user_email": email
+        }
+        threading.Thread(
+            target=workflow.invoke, args=(state, {"configurable": {"thread_id": f"slack-{ts}"}}), daemon=True
+        ).start()
 
     except Exception as e:
-        logging.error(f"Error handling app mention: {e}", exc_info=True)
-        say(f"An error occurred while processing your request: {e}", thread_ts=thread_ts)
+        say(f"System Error: {str(e)}", thread_ts=ts)

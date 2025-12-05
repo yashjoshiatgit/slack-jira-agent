@@ -2,16 +2,13 @@
   "managers": {
     "yashjoshi.one@gmail.com": [
       "peauampeauam@gmail.com",
-      "yash_22132@ldrp.ac.in"
+      "yashjoshi1485@gmail.com"
     ],
     "vaishal2611@gmail.com":[
-       "yashjoshi1485@gmail.com"
-    ],
-    "yash_22132@gmail.com":[
        "yashjoshi1485@gmail.com"
     ]
   },
   "fallback_approvers": [
-    "vaishal2611@gmail.com"
+    "yash_22132@ldrp.ac.in"
   ]
 }
